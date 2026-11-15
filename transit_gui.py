@@ -18,8 +18,8 @@ entry = Entry(root, width=20)
 entry.grid(row=1, column=2)
 
 # Results table
-tree = Treeview(root, height=14, show="headings")
-tree.grid(row=2, column=0, columnspan=4, padx=10, pady=10)
+results = Treeview(root, height=14, show="headings")
+results.grid(row=2, column=0, columnspan=4, padx=10, pady=10)
 
 lbl = Label(root)
 lbl.grid(row=3, column=0, columnspan=4, pady=5)
@@ -33,13 +33,13 @@ def search(event=None):
     headings, rows = db.SEARCHES[search_by.get()](query)
 
     # Clear the old results and set up the columns for this search
-    tree.delete(*tree.get_children())
-    tree["columns"] = headings
+    results.delete(*results.get_children())
+    results["columns"] = headings
     for h in headings:
-        tree.heading(h, text=h)
-        tree.column(h, width=100)
+        results.heading(h, text=h)
+        results.column(h, width=100)
     for row in rows:
-        tree.insert("", "end", values=["" if v is None else v for v in row])
+        results.insert("", "end", values=["" if v is None else v for v in row])
 
     if rows:
         lbl.configure(text="Found " + str(len(rows)) + " result(s)")

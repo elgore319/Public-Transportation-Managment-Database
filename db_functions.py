@@ -1,10 +1,3 @@
-# Database functions for the bus schedule lookup GUI.
-# The GUI (transit_gui.py) imports this file. This file never imports the GUI,
-# so the database code and the screen code stay separate.
-#
-# It reads the tables that Create_Tables.py makes in public_transportation.db.
-# Nothing here changes the database.
-
 import sqlite3
 import os
 

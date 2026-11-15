@@ -13,8 +13,8 @@ def insert_route(route_number):
 
 def insert_stop(stop_number,stop_name,latitude,longitude,is_active):
     conn = sqlite3.connect('public_transportation.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO Stops (stop_number,stop_name,latitude,longitude,is_active) VALUES (?, ?, ?, ?, ?)", 
+    cursor  = conn.cursor()
+    cursor.execute("INSERT INTO Stops (stop_number,stop_name,latitude,longitude,is_active) VALUES (?, ?, ?, ?, ?)", 
               (stop_number,stop_name,latitude,longitude,is_active))
     conn.commit()
     conn.close()

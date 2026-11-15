@@ -6,7 +6,7 @@ cursor = conn.cursor()
 
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS Routes (
-        Route_Number INTEGER PRIMARY KEY
+        Route_Number INTEGER PRIMARY KEY AUTOiNCREMENT 
 );
 ''')
 conn.commit()

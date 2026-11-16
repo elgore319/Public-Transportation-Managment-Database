@@ -66,14 +66,6 @@ def update_passengers(passenger_id, first_name, last_name):
     conn.commit()
     conn.close()
 
-def update_passengers(passenger_id, first_name, last_name):
-    conn = sqlite3.connect('public_transportation.db')
-    cursor = conn.cursor()
-    cursor.execute("UPDATE contacts SET passenger_id = ? first_name = ? last_name = ? WHERE id = ?", 
-                   (passenger_id, first_name, last_name))
-    conn.commit()
-    conn.close()
-
 def update_gps_records(gps_record_id, vehicle_id, timeStamp, latitude, longitude):
     conn = sqlite3.connect('public_transportation.db')
     cursor = conn.cursor()

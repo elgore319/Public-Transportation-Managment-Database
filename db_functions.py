@@ -3,13 +3,124 @@ import os
 
 # The database file sits in the same folder as this file
 DB_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "public_transportation.db")
+TABLES = (
+    "Routes",
+    "Stops",
+    "Schedules",
+    "Trips",
+    "Tickets",
+    "Vehicles",
+    "Drivers",
+    "Passengers",
+    "GPS_Records",
+)
 
 
 def run_query(sql, params=()):
     conn = sqlite3.connect(DB_FILE)
-    rows = conn.execute(sql, params).fetchall()
-    conn.close()
-    return rows
+    try:
+        return conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
+
+
+def _get_table_info(table_name):
+    if table_name not in TABLES:
+        raise ValueError("Unknown table: " + table_name)
+
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        return conn.execute('PRAGMA table_info("' + table_name + '")').fetchall()
+    finally:
+        conn.close()
+
+
+def get_table_schema(table_name):
+    """Return each table column's name, declared type, and primary-key flag."""
+    return [(row[1], row[2], bool(row[5])) for row in _get_table_info(table_name)]
+
+
+def get_table_rows(table_name):
+    schema = get_table_schema(table_name)
+    columns = [column[0] for column in schema]
+    quoted_table = '"' + table_name + '"'
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        rows = conn.execute("SELECT * FROM " + quoted_table).fetchall()
+        return columns, rows
+    finally:
+        conn.close()
+
+
+def insert_record(table_name, values):
+    columns = [column[0] for column in get_table_schema(table_name)]
+    if any(column not in columns for column in values):
+        raise ValueError("An insert field is not part of " + table_name)
+
+    quoted_table = '"' + table_name + '"'
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        if values:
+            column_names = ", ".join('"' + column + '"' for column in values)
+            placeholders = ", ".join("?" for _ in values)
+            cursor = conn.execute(
+                "INSERT INTO " + quoted_table + " (" + column_names + ") "
+                "VALUES (" + placeholders + ")",
+                tuple(values.values()),
+            )
+        else:
+            cursor = conn.execute("INSERT INTO " + quoted_table + " DEFAULT VALUES")
+        conn.commit()
+        return cursor.lastrowid
+    finally:
+        conn.close()
+
+
+def update_record(table_name, primary_key, primary_key_value, values):
+    schema = get_table_schema(table_name)
+    columns = [column[0] for column in schema]
+    primary_keys = [column[0] for column in schema if column[2]]
+    if primary_key not in primary_keys:
+        raise ValueError("Invalid primary key for " + table_name)
+    if any(column not in columns or column == primary_key for column in values):
+        raise ValueError("An update field is not editable in " + table_name)
+    if not values:
+        raise ValueError("Enter at least one field to update")
+
+    assignments = ", ".join('"' + column + '" = ?' for column in values)
+    quoted_table = '"' + table_name + '"'
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.execute(
+            "UPDATE " + quoted_table + " SET " + assignments +
+            ' WHERE "' + primary_key + '" = ?',
+            tuple(values.values()) + (primary_key_value,),
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
+
+
+def delete_record(table_name, primary_key, primary_key_value):
+    schema = get_table_schema(table_name)
+    primary_keys = [column[0] for column in schema if column[2]]
+    if primary_key not in primary_keys:
+        raise ValueError("Invalid primary key for " + table_name)
+
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        cursor = conn.execute(
+            'DELETE FROM "' + table_name + '" WHERE "' + primary_key + '" = ?',
+            (primary_key_value,),
+        )
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
 
 
 # Ticket searches join Tickets -> Trips (route, bus, times) and Tickets -> Passengers (name)

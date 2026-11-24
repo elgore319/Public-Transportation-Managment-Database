@@ -1,6 +1,7 @@
 import tkinter as tk
 import transit_gui
 import manage_page
+import reports_page
 
 
 def main_menu_gui(parent=None):
@@ -22,6 +23,9 @@ def main_menu_gui(parent=None):
 
     menu_button2 = tk.Button(button, text="Head to manage database", command=lambda: manage_page.open_manage(root))
     menu_button2.grid(row=1, column=0, padx=5, pady=5)
+
+    menu_button3 = tk.Button(button, text="Head to reports", command=lambda: reports_page.open_reports(root))
+    menu_button3.grid(row=2, column=0, padx=5, pady=5)
    
     if parent is None:
         root.mainloop()

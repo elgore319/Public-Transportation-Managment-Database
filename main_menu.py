@@ -9,7 +9,7 @@ def main_menu_gui():
     frame = tk.Frame(root)
     frame.pack(pady=10)
 
-    tk.Label(frame, text = "Welcome to the City Public Transportaion", font = ("Arial", 16, "bold")).grid(row = 50, column = 5)
+    tk.Label(frame, text = "Welcome to the City Public Transportaion", font = ("Arial", 16, "bold")).grid(row=60, column=5)
 
     button = tk.Frame(root)
     button.pack(pady=10)

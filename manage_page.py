@@ -5,6 +5,9 @@ import sqlite3
 from tkinter import messagebox
 from tkinter.ttk import *
 import db_functions as db
+import Insert_Data as ins
+import Update_Data as upd
+import Delete_Data as dele
 
 NEW_ROUTE = "New route"
 
@@ -84,7 +87,7 @@ def passenger_id(first, last):
                         "ORDER BY Passenger_ID", (first, last))
     if rows:
         return rows[0][0]
-    return db.insert_record("Passengers", {"First_Name": first, "Last_Name": last})
+    return ins.insert_passengers(None, first, last)
 
 
 def first_trip(route_number):
@@ -100,7 +103,7 @@ def ticket_create():
     try:
         first, last = ticket_name()
         trip = first_trip(ticket_route())
-        ticket_id = db.insert_record("Tickets", {"Trip_ID": trip, "Passenger_ID": passenger_id(first, last)})
+        ticket_id = ins.insert_tickets(None, trip, passenger_id(first, last))
         status.configure(text="Ticket " + str(ticket_id) + " created for " + first + " " + last)
     except (sqlite3.Error, ValueError) as err:
         error("Could not create ticket", err)
@@ -142,14 +145,14 @@ def ticket_update():
         return need_read("ticket")
     try:
         first, last = ticket_name()
-        values = {"Passenger_ID": passenger_id(first, last)}
-        old = db.run_query("SELECT t.Route_Number FROM Tickets k JOIN Trips t ON t.Trip_ID = k.Trip_ID "
+        old = db.run_query("SELECT k.Trip_ID, t.Route_Number FROM Tickets k JOIN Trips t ON t.Trip_ID = k.Trip_ID "
                            "WHERE k.Ticket_ID = ?", (ticket_id,))
+        if not old:
+            raise ValueError("Ticket no longer exists")
         new_route = ticket_route()
-        if not old or old[0][0] != new_route:
-            values["Trip_ID"] = first_trip(new_route)
-        updated = db.update_record("Tickets", "Ticket_ID", ticket_id, values)
-        status.configure(text="Ticket " + str(ticket_id) + " updated" if updated else "Ticket no longer exists")
+        trip = old[0][0] if old[0][1] == new_route else first_trip(new_route)
+        upd.update_tickets(ticket_id, trip, passenger_id(first, last))
+        status.configure(text="Ticket " + str(ticket_id) + " updated")
     except (sqlite3.Error, ValueError) as err:
         error("Could not update ticket", err)
 
@@ -161,8 +164,8 @@ def ticket_delete():
     if not messagebox.askyesno("Confirm delete", "Delete ticket " + str(ticket_id) + "?", parent=root):
         return
     try:
-        deleted = db.delete_record("Tickets", "Ticket_ID", ticket_id)
-        status.configure(text="Ticket " + str(ticket_id) + " deleted" if deleted else "Ticket no longer exists")
+        dele.delete_tickets(ticket_id)
+        status.configure(text="Ticket " + str(ticket_id) + " deleted")
         ticket_id = None
         t_first.delete(0, "end")
         t_last.delete(0, "end")
@@ -173,7 +176,7 @@ def ticket_delete():
 
 # ---------------- Route ----------------
 route_frame = Frame(root, padding=10)
-r_route = add_field(route_frame, 0, "Route:", Combobox(route_frame, state="readonly", width=28))
+r_route = add_field(route_frame, 0, "Route #:", Combobox(route_frame, state="readonly", width=28))
 r_stop = add_field(route_frame, 1, "Stop:", Combobox(route_frame, state="readonly", width=28))
 r_order = add_field(route_frame, 2, "Stop Order:", Entry(route_frame, width=30))
 r_time = add_field(route_frame, 3, "Arrival Time (HH:MM):", Entry(route_frame, width=30))
@@ -213,11 +216,11 @@ def route_create():
             raise ValueError("Please choose a route, or New route")
         values = route_fields()
         if r_route.get() == NEW_ROUTE:
-            route_number = db.insert_record("Routes", {})
+            route_number = ins.insert_route(None)
         else:
             route_number = int(r_route.get())
-        values["Route_Number"] = route_number
-        schedule_id = db.insert_record("Schedules", values)
+        schedule_id = ins.insert_schedules(None, values["Stop_Number"], route_number, values["Stop_Order"],
+                                           values["Schedule_Arrival_Time"])
         route_show()
         r_route.set(route_number)
         status.configure(text="Stop added to Route " + str(route_number))
@@ -270,10 +273,11 @@ def route_update():
         return need_read("stop on the route")
     try:
         values = route_fields()
-        if r_route.get() and r_route.get() != NEW_ROUTE:
-            values["Route_Number"] = int(r_route.get())
-        updated = db.update_record("Schedules", "Schedule_ID", schedule_id, values)
-        status.configure(text="Stop updated" if updated else "Stop no longer exists")
+        if not r_route.get() or r_route.get() == NEW_ROUTE:
+            raise ValueError("Please choose a route")
+        upd.update_schedules(schedule_id, values["Stop_Number"], int(r_route.get()), values["Stop_Order"],
+                             values["Schedule_Arrival_Time"])
+        status.configure(text="Stop updated")
     except (sqlite3.Error, ValueError) as err:
         error("Could not update route", err)
 
@@ -286,14 +290,14 @@ def route_delete():
         return
     route_number = int(r_route.get())
     try:
-        db.delete_record("Schedules", "Schedule_ID", schedule_id)
+        dele.delete_schedules(schedule_id)
         text = "Stop deleted from Route " + str(route_number)
         if not db.run_query("SELECT 1 FROM Schedules WHERE Route_Number = ?", (route_number,)):
-            try:
-                db.delete_record("Routes", "Route_Number", route_number)
-                text = "Route " + str(route_number) + " deleted (it had no stops left)"
-            except sqlite3.IntegrityError:
+            if db.run_query("SELECT 1 FROM Trips WHERE Route_Number = ?", (route_number,)):
                 text += ". The route has no stops left but trips still use it"
+            else:
+                dele.delete_route(route_number)
+                text = "Route " + str(route_number) + " deleted (it had no stops left)"
         route_clear()
         route_show()
         status.configure(text=text)
@@ -335,7 +339,9 @@ def stop_fields():
 def stop_create():
     global stop_number
     try:
-        stop_number = db.insert_record("Stops", stop_fields())
+        values = stop_fields()
+        stop_number = ins.insert_stop(None, values["Stop_Name"], values["Latitude"], values["Longitude"],
+                                      values["Is_Active"])
         status.configure(text="Stop " + str(stop_number) + " created")
     except (sqlite3.Error, ValueError) as err:
         error("Could not create stop", err)
@@ -368,8 +374,10 @@ def stop_update():
     if stop_number is None:
         return need_read("stop")
     try:
-        updated = db.update_record("Stops", "Stop_Number", stop_number, stop_fields())
-        status.configure(text="Stop updated" if updated else "Stop no longer exists")
+        values = stop_fields()
+        upd.update_stop(stop_number, values["Stop_Name"], values["Latitude"], values["Longitude"],
+                        values["Is_Active"])
+        status.configure(text="Stop updated")
     except (sqlite3.Error, ValueError) as err:
         error("Could not update stop", err)
 
@@ -381,12 +389,14 @@ def stop_delete():
     if not messagebox.askyesno("Confirm delete", "Delete " + s_name.get() + "?", parent=root):
         return
     try:
-        deleted = db.delete_record("Stops", "Stop_Number", stop_number)
+        if db.run_query("SELECT 1 FROM Schedules WHERE Stop_Number = ?", (stop_number,)):
+            raise sqlite3.IntegrityError
+        dele.delete_stop(stop_number)
         stop_number = None
         for field in (s_name, s_lat, s_lon):
             field.delete(0, "end")
         s_active.current(0)
-        status.configure(text="Stop deleted" if deleted else "Stop no longer exists")
+        status.configure(text="Stop deleted")
     except sqlite3.IntegrityError:
         error("Could not delete stop", "Routes still use this stop. Remove it from those routes first, "
                                        "or set Active to No.")

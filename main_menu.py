@@ -16,7 +16,7 @@ def main_menu_gui():
     button = tk.Frame(root)
     button.pack(pady=10)
 
-    menu_button = tk.Button(button, text="Head to search", command=transit_gui.search)
+    menu_button = tk.Button(button, text="Head to search", command=lambda: transit_gui.open_search(root))
     menu_button.grid(row=0, column=0, padx=5, pady=5)
 
    

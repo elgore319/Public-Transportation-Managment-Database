@@ -103,7 +103,7 @@ def open_manage():
     
     
     def ticket_create():
-        global ticket_id
+        nonlocal ticket_id
         try:
             first, last = ticket_name()
             trip = first_trip(ticket_route())
@@ -114,7 +114,7 @@ def open_manage():
     
     
     def ticket_read():
-        global ticket_id
+        nonlocal ticket_id
         try:
             first, last = ticket_name()
             sql = """
@@ -162,7 +162,7 @@ def open_manage():
     
     
     def ticket_delete():
-        global ticket_id
+        nonlocal ticket_id
         if ticket_id is None:
             return need_read("ticket")
         if not messagebox.askyesno("Confirm delete", "Delete ticket " + str(ticket_id) + "?", parent=root):
@@ -189,7 +189,7 @@ def open_manage():
     
     
     def route_show():
-        global stops
+        nonlocal stops
         stops = stop_names()
         r_route["values"] = [NEW_ROUTE] + route_numbers()
         r_stop["values"] = list(stops)
@@ -205,7 +205,7 @@ def open_manage():
     
     
     def route_clear():
-        global schedule_id
+        nonlocal schedule_id
         schedule_id = None
         r_route.set("")
         r_stop.set("")
@@ -214,7 +214,7 @@ def open_manage():
     
     
     def route_create():
-        global schedule_id
+        nonlocal schedule_id
         try:
             if not r_route.get():
                 raise ValueError("Please choose a route, or New route")
@@ -233,7 +233,7 @@ def open_manage():
     
     
     def route_read():
-        global schedule_id
+        nonlocal schedule_id
         if not r_route.get() or r_route.get() == NEW_ROUTE:
             messagebox.showinfo("Choose a route", "Choose a route to read.", parent=root)
             return
@@ -341,7 +341,7 @@ def open_manage():
     
     
     def stop_create():
-        global stop_number
+        nonlocal stop_number
         try:
             values = stop_fields()
             stop_number = ins.insert_stop(None, values["Stop_Name"], values["Latitude"], values["Longitude"],
@@ -352,7 +352,7 @@ def open_manage():
     
     
     def stop_read():
-        global stop_number
+        nonlocal stop_number
         try:
             rows = db.run_query("SELECT Stop_Number, Stop_Name, Latitude, Longitude, Is_Active FROM Stops "
                                 "WHERE Stop_Name LIKE ? ORDER BY Stop_Name", ("%" + stop_name() + "%",))
@@ -387,7 +387,7 @@ def open_manage():
     
     
     def stop_delete():
-        global stop_number
+        nonlocal stop_number
         if stop_number is None:
             return need_read("stop")
         if not messagebox.askyesno("Confirm delete", "Delete " + s_name.get() + "?", parent=root):

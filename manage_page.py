@@ -9,13 +9,13 @@ import Update_Data as upd
 import Delete_Data as dele
 
 
-def open_manage():
+def open_manage(parent=None):
     
     
 
     NEW_ROUTE = "New route"
     
-    root = tkinter.Tk()
+    root = tkinter.Toplevel(parent) if parent is not None else tkinter.Tk()
     root.title("Transit Manager")
     root.geometry("360x640")
     
@@ -806,4 +806,5 @@ def open_manage():
     choice.bind("<<ComboboxSelected>>", show_page)
     choice.current(0)
     show_page()
-    root.mainloop()
+    if parent is None:
+        root.mainloop()

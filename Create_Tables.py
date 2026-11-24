@@ -1,7 +1,8 @@
 import sqlite3
+from db_functions import DB_FILE
 
 
-conn = sqlite3.connect('public_transportation.db')
+conn = sqlite3.connect(DB_FILE)
 cursor = conn.cursor()
 
 cursor.execute('''

@@ -46,6 +46,13 @@ def delete_vehicles(vehicle_id):
     conn.commit()
     conn.close()
 
+def delete_drivers(driver_id):
+    conn = sqlite3.connect('public_transportation.db')
+    c= conn.cursor()
+    c.execute("DELETE FROM Drivers WHERE driver_id = ?", (driver_id,))
+    conn.commit()
+    conn.close()
+
 def delete_passenger(passenger_id):
     conn = sqlite3.connect('public_transportation.db')
     c= conn.cursor()

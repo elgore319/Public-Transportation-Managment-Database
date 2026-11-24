@@ -1,5 +1,6 @@
 import tkinter as tk
 import transit_gui
+import manage_page
 
 
 def main_menu_gui():
@@ -19,6 +20,8 @@ def main_menu_gui():
     menu_button = tk.Button(button, text="Head to search", command=lambda: transit_gui.open_search(root))
     menu_button.grid(row=0, column=0, padx=5, pady=5)
 
+    menu_button2 = tk.Button(button, text="Head to mangage database", command=lambda: manage_page.open_manage())
+    menu_button2.grid(row=1, column=0, padx=5, pady=5)
    
     root.mainloop()
 

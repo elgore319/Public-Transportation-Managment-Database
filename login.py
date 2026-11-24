@@ -1,4 +1,5 @@
 import tkinter as tk
+import main_menu
 from tkinter import messagebox
 
 # Function to validate the login
@@ -7,7 +8,7 @@ def validate_login():
     password = password_entry.get()
 
     if userid == "admin" and password == "password":
-        messagebox.showinfo("Login Successful", "Welcome, Admin!")
+        main_menu.main_menu_gui()
     else:
         messagebox.showerror("Login Failed", "Invalid username or password")
 

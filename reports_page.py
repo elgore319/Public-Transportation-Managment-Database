@@ -141,6 +141,13 @@ def open_reports(parent=None):
     frame.rowconfigure(3, weight=1)
 
     def run(event=None):
+        if report.get() in NEEDS_STOPS:
+            names = [row[0] for row in db.run_query("SELECT Stop_Name FROM Stops ORDER BY Stop_Name")]
+            from_stop["values"] = names
+            to_stop["values"] = names
+            stops.grid()
+        else:
+            stops.grid_remove()
         headings, sql = REPORTS[report.get()]
         params = ()
         if report.get() in NEEDS_STOPS:
@@ -162,7 +169,7 @@ def open_reports(parent=None):
             results.insert("", "end", values=["" if v is None else v for v in row])
         lbl.configure(text=str(len(rows)) + " row(s)" if rows else "No results")
 
-    Button(frame, text="Run", command=run).grid(row=1, column=2)
+    Button(frame, text="Refresh", command=run).grid(row=1, column=2)
     report.bind("<<ComboboxSelected>>", run)
     from_stop.bind("<<ComboboxSelected>>", run)
     to_stop.bind("<<ComboboxSelected>>", run)

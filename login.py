@@ -8,7 +8,8 @@ def validate_login():
     password = password_entry.get()
 
     if userid == "admin" and password == "password":
-        main_menu.main_menu_gui()
+        root.withdraw()
+        main_menu.main_menu_gui(root)
     else:
         messagebox.showerror("Login Failed", "Invalid username or password")
 

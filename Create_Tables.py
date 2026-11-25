@@ -16,9 +16,9 @@ cursor.execute('''
     CREATE TABLE IF NOT EXISTS Stops (
         Stop_Number INTEGER PRIMARY KEY,
         Stop_Name TEXT NOT NULL,
-        Latitude REAL,
-        Longitude REAL,
-        Is_Active NUMERIC
+        Latitude REAL CHECK (Latitude BETWEEN -90 AND 90),
+        Longitude REAL CHECK (Longitude BETWEEN -180 AND 180),
+        Is_Active NUMERIC CHECK (Is_Active IN (0, 1))
 );
 ''')
 conn.commit()
@@ -28,7 +28,7 @@ cursor.execute('''
         Schedule_ID INTEGER PRIMARY KEY,
         Stop_Number INTEGER,
         Route_Number INTEGER,
-        Stop_Order INTEGER,
+        Stop_Order INTEGER CHECK (Stop_Order > 0),
         Schedule_Arrival_Time NUMERIC,
         FOREIGN KEY (Stop_Number) REFERENCES Stops(Stop_Number),
         FOREIGN KEY (Route_Number) REFERENCES Routes(Route_Number)
@@ -46,6 +46,7 @@ cursor.execute('''
         End_Time NUMERIC,
         Actual_Start_Time NUMERIC,
         Actual_End_Time NUMERIC,
+        CHECK (End_Time > Start_Time),
         FOREIGN KEY (Route_Number) REFERENCES Routes(Route_Number),
         FOREIGN KEY (Vehicle_ID) REFERENCES Vehicles(Vehicle_ID),
         FOREIGN KEY (Driver_ID) REFERENCES Drivers(Driver_ID)
@@ -56,8 +57,8 @@ conn.commit()
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS Tickets (
         Ticket_ID INTEGER PRIMARY KEY,
-        Trip_ID INTEGER,
-        Passenger_ID INTEGER,
+        Trip_ID INTEGER NOT NULL,
+        Passenger_ID INTEGER NOT NULL,
         FOREIGN KEY (Trip_ID) REFERENCES Trips(Trip_ID),
         FOREIGN KEY (Passenger_ID) REFERENCES Passengers(Passenger_ID)
 );
@@ -67,7 +68,7 @@ conn.commit()
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS Vehicles (
         Vehicle_ID INTEGER PRIMARY KEY,
-        Capacity INTEGER
+        Capacity INTEGER CHECK (Capacity > 0)
 );
 ''')
 conn.commit()

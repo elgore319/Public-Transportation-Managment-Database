@@ -9,20 +9,20 @@ import Update_Data as upd
 import Delete_Data as dele
 
 
-def open_manage():
+def open_manage(parent=None):
     
     
 
     NEW_ROUTE = "New route"
     
-    root = tkinter.Tk()
+    root = tkinter.Toplevel(parent) if parent is not None else tkinter.Tk()
     root.title("Transit Manager")
-    root.geometry("360x520")
+    root.geometry("360x640")
     
     top = Frame(root, padding=10)
     top.pack(fill="x")
     Label(top, text="Change:", font=("Arial", 12)).grid(row=0, column=0, sticky="w")
-    choice = Combobox(top, values=["Ticket", "Route", "Stop"], state="readonly", width=28)
+    choice = Combobox(top, values=["Ticket", "Route", "Stop", "Trip", "Vehicle", "Driver", "GPS Record"], state="readonly", width=28)
     choice.grid(row=1, column=0, sticky="ew")
     top.columnconfigure(0, weight=1)
     
@@ -408,11 +408,378 @@ def open_manage():
             error("Could not delete stop", err)
     
     
+    def vehicle_ids():
+        return [row[0] for row in db.run_query("SELECT Vehicle_ID FROM Vehicles ORDER BY Vehicle_ID")]
+    
+    
+    def driver_names():
+        rows = db.run_query("SELECT Driver_ID, First_Name, Last_Name FROM Drivers ORDER BY Last_Name, First_Name")
+        return [str(d) + " - " + first + " " + last for d, first, last in rows]
+    
+    
+    def picked_id(box, name):
+        if not box.get():
+            raise ValueError("Please choose a " + name)
+        return int(str(box.get()).split(" - ")[0])
+    
+    
+    def blank_none(field):
+        return field.get().strip() or None
+    
+    
+    # ---------------- Trip ----------------
+    trip_frame = Frame(root, padding=10)
+    tr_route = add_field(trip_frame, 0, "Route #:", Combobox(trip_frame, state="readonly", width=28))
+    tr_vehicle = add_field(trip_frame, 1, "Vehicle #:", Combobox(trip_frame, state="readonly", width=28))
+    tr_driver = add_field(trip_frame, 2, "Driver:", Combobox(trip_frame, state="readonly", width=28))
+    tr_start = add_field(trip_frame, 3, "Start Time (HH:MM):", Entry(trip_frame, width=30))
+    tr_end = add_field(trip_frame, 4, "End Time (HH:MM):", Entry(trip_frame, width=30))
+    tr_actual_start = add_field(trip_frame, 5, "Actual Start Time (blank = not left yet):", Entry(trip_frame, width=30))
+    tr_actual_end = add_field(trip_frame, 6, "Actual End Time:", Entry(trip_frame, width=30))
+    trip_id = None
+    
+    
+    def trip_show():
+        tr_route["values"] = route_numbers()
+        tr_vehicle["values"] = vehicle_ids()
+        tr_driver["values"] = driver_names()
+    
+    
+    def trip_fields():
+        start, end = tr_start.get().strip(), tr_end.get().strip()
+        if not start or not end:
+            raise ValueError("Please enter the start and end time")
+        return (picked_id(tr_route, "route"), picked_id(tr_vehicle, "vehicle"), picked_id(tr_driver, "driver"),
+                start, end, blank_none(tr_actual_start), blank_none(tr_actual_end))
+    
+    
+    def trip_create():
+        nonlocal trip_id
+        try:
+            trip_id = ins.insert_trips(None, *trip_fields())
+            status.configure(text="Trip " + str(trip_id) + " created")
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not create trip", err)
+    
+    
+    def trip_read():
+        nonlocal trip_id
+        sql = """
+            SELECT Trip_ID, Route_Number, Vehicle_ID, Driver_ID, Start_Time, End_Time, Actual_Start_Time, Actual_End_Time
+            FROM Trips WHERE 1 = 1
+        """
+        params = ()
+        try:
+            if tr_route.get():
+                sql += " AND Route_Number = ?"
+                params += (picked_id(tr_route, "route"),)
+            if tr_vehicle.get():
+                sql += " AND Vehicle_ID = ?"
+                params += (picked_id(tr_vehicle, "vehicle"),)
+            if tr_driver.get():
+                sql += " AND Driver_ID = ?"
+                params += (picked_id(tr_driver, "driver"),)
+            if tr_start.get().strip():
+                sql += " AND Start_Time = ?"
+                params += (tr_start.get().strip(),)
+            if not params:
+                raise ValueError("Choose a route, vehicle or driver, or enter a start time to read")
+            rows = db.run_query(sql + " ORDER BY Start_Time, Trip_ID", params)
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not read trip", err)
+            return
+        if not rows:
+            trip_id = None
+            status.configure(text="No trip found")
+            return
+        trip_id, route, vehicle, driver, start, end, actual_start, actual_end = rows[0]
+        tr_route.set(route)
+        tr_vehicle.set(vehicle)
+        tr_driver.set(next((d for d in driver_names() if d.split(" - ")[0] == str(driver)), ""))
+        for field, value in ((tr_start, start), (tr_end, end), (tr_actual_start, actual_start), (tr_actual_end, actual_end)):
+            set_entry(field, value)
+        text = "Trip " + str(trip_id) + " loaded"
+        if len(rows) > 1:
+            text += ". " + str(len(rows)) + " trips match, showing the first"
+        status.configure(text=text)
+    
+    
+    def trip_update():
+        if trip_id is None:
+            return need_read("trip")
+        try:
+            upd.update_trips(trip_id, *trip_fields())
+            status.configure(text="Trip " + str(trip_id) + " updated")
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not update trip", err)
+    
+    
+    def trip_delete():
+        nonlocal trip_id
+        if trip_id is None:
+            return need_read("trip")
+        if db.run_query("SELECT 1 FROM Tickets WHERE Trip_ID = ?", (trip_id,)):
+            return error("Could not delete trip", "Tickets are still on this trip.")
+        if not messagebox.askyesno("Confirm delete", "Delete trip " + str(trip_id) + "?", parent=root):
+            return
+        try:
+            dele.delete_trips(trip_id)
+            status.configure(text="Trip " + str(trip_id) + " deleted")
+            trip_id = None
+            for box in (tr_route, tr_vehicle, tr_driver):
+                box.set("")
+            for field in (tr_start, tr_end, tr_actual_start, tr_actual_end):
+                field.delete(0, "end")
+        except sqlite3.Error as err:
+            error("Could not delete trip", err)
+    
+    
+    # ---------------- Vehicle ----------------
+    vehicle_frame = Frame(root, padding=10)
+    v_id = add_field(vehicle_frame, 0, "Vehicle # (blank = next number):", Entry(vehicle_frame, width=30))
+    v_capacity = add_field(vehicle_frame, 1, "Capacity:", Entry(vehicle_frame, width=30))
+    vehicle_id = None
+    
+    
+    def vehicle_show():
+        pass
+    
+    
+    def vehicle_capacity():
+        text = v_capacity.get().strip()
+        if not text:
+            raise ValueError("Please enter the capacity")
+        return int(text)
+    
+    
+    def vehicle_create():
+        nonlocal vehicle_id
+        try:
+            typed = v_id.get().strip()
+            vehicle_id = ins.insert_vehicles(int(typed) if typed else None, vehicle_capacity())
+            set_entry(v_id, vehicle_id)
+            status.configure(text="Vehicle " + str(vehicle_id) + " created")
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not create vehicle", err)
+    
+    
+    def vehicle_read():
+        nonlocal vehicle_id
+        try:
+            typed = v_id.get().strip()
+            if not typed:
+                raise ValueError("Please enter a vehicle number")
+            rows = db.run_query("SELECT Vehicle_ID, Capacity FROM Vehicles WHERE Vehicle_ID = ?", (int(typed),))
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not read vehicle", err)
+            return
+        if not rows:
+            vehicle_id = None
+            status.configure(text="No vehicle " + typed)
+            return
+        vehicle_id = rows[0][0]
+        set_entry(v_capacity, rows[0][1])
+        status.configure(text="Vehicle " + str(vehicle_id) + " loaded")
+    
+    
+    def vehicle_update():
+        if vehicle_id is None:
+            return need_read("vehicle")
+        try:
+            upd.update_vehicles(vehicle_id, vehicle_capacity())
+            set_entry(v_id, vehicle_id)
+            status.configure(text="Vehicle " + str(vehicle_id) + " updated")
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not update vehicle", err)
+    
+    
+    def vehicle_delete():
+        nonlocal vehicle_id
+        if vehicle_id is None:
+            return need_read("vehicle")
+        if db.run_query("SELECT 1 FROM Trips WHERE Vehicle_ID = ? UNION SELECT 1 FROM GPS_Records WHERE Vehicle_ID = ?",
+                        (vehicle_id, vehicle_id)):
+            return error("Could not delete vehicle", "Trips or GPS records still use this vehicle.")
+        if not messagebox.askyesno("Confirm delete", "Delete vehicle " + str(vehicle_id) + "?", parent=root):
+            return
+        try:
+            dele.delete_vehicles(vehicle_id)
+            status.configure(text="Vehicle " + str(vehicle_id) + " deleted")
+            vehicle_id = None
+            v_id.delete(0, "end")
+            v_capacity.delete(0, "end")
+        except sqlite3.Error as err:
+            error("Could not delete vehicle", err)
+    
+    
+    # ---------------- Driver ----------------
+    driver_frame = Frame(root, padding=10)
+    d_first = add_field(driver_frame, 0, "First Name:", Entry(driver_frame, width=30))
+    d_last = add_field(driver_frame, 1, "Last Name:", Entry(driver_frame, width=30))
+    d_shift_start = add_field(driver_frame, 2, "Shift Start (HH:MM):", Entry(driver_frame, width=30))
+    d_shift_end = add_field(driver_frame, 3, "Shift End (HH:MM):", Entry(driver_frame, width=30))
+    driver_id = None
+    
+    
+    def driver_show():
+        pass
+    
+    
+    def driver_name():
+        first, last = d_first.get().strip(), d_last.get().strip()
+        if not first or not last:
+            raise ValueError("Please enter the driver's first and last name")
+        return first, last
+    
+    
+    def driver_create():
+        nonlocal driver_id
+        try:
+            first, last = driver_name()
+            driver_id = ins.insert_drivers(None, first, last, blank_none(d_shift_start), blank_none(d_shift_end))
+            status.configure(text="Driver " + str(driver_id) + " created")
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not create driver", err)
+    
+    
+    def driver_read():
+        nonlocal driver_id
+        try:
+            first, last = driver_name()
+            rows = db.run_query("SELECT Driver_ID, Shift_Start_Time, Shift_End_Time FROM Drivers "
+                                "WHERE First_Name = ? AND Last_Name = ? ORDER BY Driver_ID", (first, last))
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not read driver", err)
+            return
+        if not rows:
+            driver_id = None
+            status.configure(text="No driver named " + first + " " + last)
+            return
+        driver_id = rows[0][0]
+        set_entry(d_shift_start, rows[0][1])
+        set_entry(d_shift_end, rows[0][2])
+        status.configure(text="Driver " + str(driver_id) + " loaded")
+    
+    
+    def driver_update():
+        if driver_id is None:
+            return need_read("driver")
+        try:
+            first, last = driver_name()
+            upd.update_drivers(driver_id, first, last, blank_none(d_shift_start), blank_none(d_shift_end))
+            status.configure(text="Driver " + str(driver_id) + " updated")
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not update driver", err)
+    
+    
+    def driver_delete():
+        nonlocal driver_id
+        if driver_id is None:
+            return need_read("driver")
+        if db.run_query("SELECT 1 FROM Trips WHERE Driver_ID = ?", (driver_id,)):
+            return error("Could not delete driver", "Trips still use this driver.")
+        if not messagebox.askyesno("Confirm delete", "Delete driver " + str(driver_id) + "?", parent=root):
+            return
+        try:
+            dele.delete_drivers(driver_id)
+            status.configure(text="Driver " + str(driver_id) + " deleted")
+            driver_id = None
+            for field in (d_first, d_last, d_shift_start, d_shift_end):
+                field.delete(0, "end")
+        except sqlite3.Error as err:
+            error("Could not delete driver", err)
+    
+    
+    # ---------------- GPS Record ----------------
+    gps_frame = Frame(root, padding=10)
+    g_vehicle = add_field(gps_frame, 0, "Vehicle #:", Combobox(gps_frame, state="readonly", width=28))
+    g_time = add_field(gps_frame, 1, "Time Stamp (HH:MM):", Entry(gps_frame, width=30))
+    g_lat = add_field(gps_frame, 2, "Latitude:", Entry(gps_frame, width=30))
+    g_lon = add_field(gps_frame, 3, "Longitude:", Entry(gps_frame, width=30))
+    gps_id = None
+    
+    
+    def gps_show():
+        g_vehicle["values"] = vehicle_ids()
+    
+    
+    def gps_fields():
+        time, lat, lon = g_time.get().strip(), g_lat.get().strip(), g_lon.get().strip()
+        if not time or not lat or not lon:
+            raise ValueError("Please enter the time stamp, latitude and longitude")
+        return picked_id(g_vehicle, "vehicle"), time, float(lat), float(lon)
+    
+    
+    def gps_create():
+        nonlocal gps_id
+        try:
+            gps_id = ins.insert_gps_records(None, *gps_fields())
+            status.configure(text="GPS record " + str(gps_id) + " created")
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not create GPS record", err)
+    
+    
+    def gps_read():
+        nonlocal gps_id
+        try:
+            sql = "SELECT GPS_Record_ID, TimeStamp, Latitude, Longitude FROM GPS_Records WHERE Vehicle_ID = ?"
+            params = (picked_id(g_vehicle, "vehicle"),)
+            if g_time.get().strip():
+                sql += " AND TimeStamp = ?"
+                params += (g_time.get().strip(),)
+            rows = db.run_query(sql + " ORDER BY TimeStamp DESC", params)
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not read GPS record", err)
+            return
+        if not rows:
+            gps_id = None
+            status.configure(text="No GPS record found")
+            return
+        gps_id, time, lat, lon = rows[0]
+        set_entry(g_time, time)
+        set_entry(g_lat, lat)
+        set_entry(g_lon, lon)
+        text = "GPS record " + str(gps_id) + " loaded"
+        if len(rows) > 1:
+            text += ". " + str(len(rows)) + " records match, showing the newest"
+        status.configure(text=text)
+    
+    
+    def gps_update():
+        if gps_id is None:
+            return need_read("GPS record")
+        try:
+            upd.update_gps_records(gps_id, *gps_fields())
+            status.configure(text="GPS record " + str(gps_id) + " updated")
+        except (sqlite3.Error, ValueError) as err:
+            error("Could not update GPS record", err)
+    
+    
+    def gps_delete():
+        nonlocal gps_id
+        if gps_id is None:
+            return need_read("GPS record")
+        if not messagebox.askyesno("Confirm delete", "Delete GPS record " + str(gps_id) + "?", parent=root):
+            return
+        try:
+            dele.delete_gps_records(gps_id)
+            status.configure(text="GPS record " + str(gps_id) + " deleted")
+            gps_id = None
+            for field in (g_time, g_lat, g_lon):
+                field.delete(0, "end")
+        except sqlite3.Error as err:
+            error("Could not delete GPS record", err)
+    
+    
     # ---------------- Switching and buttons ----------------
     PAGES = {
         "Ticket": (ticket_frame, ticket_show, ticket_create, ticket_read, ticket_update, ticket_delete),
         "Route": (route_frame, route_show, route_create, route_read, route_update, route_delete),
         "Stop": (stop_frame, stop_show, stop_create, stop_read, stop_update, stop_delete),
+        "Trip": (trip_frame, trip_show, trip_create, trip_read, trip_update, trip_delete),
+        "Vehicle": (vehicle_frame, vehicle_show, vehicle_create, vehicle_read, vehicle_update, vehicle_delete),
+        "Driver": (driver_frame, driver_show, driver_create, driver_read, driver_update, driver_delete),
+        "GPS Record": (gps_frame, gps_show, gps_create, gps_read, gps_update, gps_delete),
     }
     
     
@@ -439,4 +806,5 @@ def open_manage():
     choice.bind("<<ComboboxSelected>>", show_page)
     choice.current(0)
     show_page()
-    root.mainloop()
+    if parent is None:
+        root.mainloop()
